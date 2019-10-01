@@ -1,2 +1,2 @@
-# csc615_fa19_group2
-Group 2 repository for CSC615 Unix Programming final project
+# [Fa11 2019] CSC 615 UNIX Programming
+Note: Group 2 repository for CSC615 Unix Programming Final Project
