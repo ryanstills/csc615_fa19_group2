@@ -22,6 +22,8 @@ Build a realtime adaptive vehicle that can maneuver around an undefined course f
 - [Tilt Sensor (YL-38)](https://www.amazon.com/Sensor-Vibration-Arduino-Raspberry-3-3V-12V/dp/B0822V27VC)
 - [Ranging Detector (HC-SR04)](https://www.amazon.com/SainSmart-HC-SR04-Ranging-Detector-Distance/dp/B004U8TOE6)
 
+![Project Hardware](/images/project-hardware.png)
+
 ## Project Source Code
 
 [View Project Source Code](https://github.com/ryanstills/csc615_fa19_group2)
