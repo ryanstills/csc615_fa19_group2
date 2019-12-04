@@ -1,2 +1,11 @@
 # [Fall 2019] CSC 615 UNIX Programming
-Note: Group 2 repository for CSC615 Unix Programming Final Project
+Group 2 Unix Programming Final Project
+
+## Project Team Members
+
+- Ryan Stillwagon
+- Rodolfo Salgado
+- Alex Hall
+- Zain khan
+- Austin Tsang
+- Alexander Gao
