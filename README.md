@@ -10,6 +10,10 @@ Group 2 Unix Programming Final Project
 - Austin Tsang
 - Alexander Gao
 
+## Project Objective
+
+Build a realtime adaptive vehicle that can maneuver around an undefined course from data gather from a wide range of sensors.
+
 ## Project Source Code
 
 [View Project Source Code](https://github.com/ryanstills/csc615_fa19_group2)
