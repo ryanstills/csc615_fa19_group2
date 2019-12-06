@@ -2,8 +2,8 @@
 #include <wiringPi.h>
 #include <stdio.h>
 #include <sys/time.h>
-#define trigPin 4
-#define echoPin 5
+#define trigPin 7
+#define echoPin 0
 #define MAX_DISTANCE 220 // define the maximum measured distance
 #define timeOut MAX_DISTANCE*60 // calculate timeout according to the maximum measured distance
 //function pulseIn: obtain pulse time of a pin
