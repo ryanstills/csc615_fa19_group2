@@ -27,3 +27,8 @@ Build a realtime adaptive vehicle that can maneuver around an undefined course f
 ## Project Source Code
 
 [View Project Source Code](https://github.com/ryanstills/csc615_fa19_group2)
+
+## GCC command line build
+
+gcc -o us_sensorv2 us_sensorv2.c -l wiringPi -l pthread
+
