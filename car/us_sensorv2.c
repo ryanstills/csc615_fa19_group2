@@ -8,6 +8,8 @@
 #define trigPin 7
 #define echoPin 0
 #define irPin 1
+#define linePin 3
+
 #define MAX_DISTANCE 220 // define the maximum measured distance
 #define timeOut MAX_DISTANCE*60 // calculate timeout according to the maximum measured distance
 #define NUM_THREADS 7
@@ -25,6 +27,7 @@ typedef struct CarInfo {
 	//sensor readouts
 	int ir_readout;
 	float us_distance;
+	int line_readout;
 	// more info to come	
 	
 	//sensor threads
@@ -49,13 +52,11 @@ void * getSonar(void * carInfo){ // get the measurement results of ultrasonic mo
 	
 	while(car->mode != 0){
 		long pingTime;
-		float distance;
 		digitalWrite(trigPin,HIGH); //trigPin send 10us high level
 		delayMicroseconds(10);
 		digitalWrite(trigPin,LOW);
 		pingTime = pulseIn(echoPin,HIGH,timeOut); //read plus time of echoPin
-		distance = (float)pingTime * 340.0 / 2.0 / 10000.0; // the sound speed is 340m/s, and calculate distance
-		car->us_distance = distance;
+		car->us_distance = (float)pingTime * 340.0 / 2.0 / 10000.0; // the sound speed is 340m/s, and calculate distance
 	}
 }
 
@@ -64,22 +65,31 @@ void * getIR(void * carInfo){
 	struct CarInfo * car;
     car = (struct CarInfo *) carInfo;
     
-     pinMode(irPin,INPUT);
+    pinMode(irPin,INPUT);
     
 	while(car->mode != 0){
-
-		
-		int ir_readout = 0;
-		ir_readout = digitalRead(irPin);
-		
-		car->ir_readout = !ir_readout;
+		car->ir_readout = !digitalRead(irPin);
 	}
+}
+
+void * getLineReader(void * carInfo){
+	printf("getLineReader()\n");
+	struct CarInfo * car;
+    car = (struct CarInfo *) carInfo;
+    
+	pinMode(linePin, INPUT);
+	
+	while(car->mode != 0){
+		car->line_readout = !digitalRead(linePin);
+	}
+	
 }
 
 int startCar(struct CarInfo * carInfo){
 	
 	pthread_create(&carInfo->threads[0], NULL, getSonar, (void *) carInfo);
 	pthread_create(&carInfo->threads[1], NULL, getIR, (void *) carInfo);
+	pthread_create(&carInfo->threads[2], NULL, getLineReader, (void *) carInfo);
 }
 
 int main(){
@@ -92,9 +102,10 @@ int main(){
     carInfo->mode = 1;
 	startCar(carInfo);
 	
-    while(1){
+    while(carInfo->mode = 1){
         printf("The distance is : %.2f cm\n", carInfo->us_distance);
         printf("The readout of the IR sensor is: %d\n", carInfo->ir_readout);
+        printf("The readout of the Line sesnor is: %d\n", carInfo->line_readout);
         delay(1000);
     }
     
