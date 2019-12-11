@@ -1,14 +1,22 @@
 //taken from the raspberry Pi tutorial
 #include <wiringPi.h>
 #include <stdio.h>
+#include <unistd.h>
 #include <sys/time.h>
 #include <pthread.h>
 #include <stdlib.h>
+#include <softPwm.h>
 
 #define trigPin 7
-#define echoPin 0
+#define echoPin 9
 #define irPin 1
 #define linePin 3
+#define leftmotor_a0 10
+#define leftmotor_d0 12
+
+#define left_motor_pwm 0
+#define left_motor_f 2
+#define left_motor_r 3
 
 #define MAX_DISTANCE 220 // define the maximum measured distance
 #define timeOut MAX_DISTANCE*60 // calculate timeout according to the maximum measured distance
@@ -28,7 +36,10 @@ typedef struct CarInfo {
 	int ir_readout;
 	float us_distance;
 	int line_readout;
-	// more info to come	
+	// more info to come
+	
+	//left motor
+	float leftmotor_speed;
 	
 	//sensor threads
 	pthread_t threads[NUM_THREADS];
@@ -40,7 +51,35 @@ typedef struct CarInfo {
 int pulseIn(int pin, int level, int timeout);
 int startCar(struct CarInfo *);
 
+void * initMotor(void * carInfo) {
+   
+   pinMode(left_motor_f, OUTPUT);
+   pinMode(left_motor_r, OUTPUT);
+   pinMode(left_motor_pwm, PWM_OUTPUT);
+   
+   softPwmCreate(left_motor_pwm, 0, 100);
+   digitalWrite(left_motor_f, HIGH);
+   softPwmWrite(left_motor_pwm, 15);
+   
+   sleep(15);
+   
+   softPwmWrite(left_motor_pwm, 0);
+}
 
+void * getMotorSpeed(void * carInfo){
+    printf("getMotorSpeed()\n");
+    struct CarInfo * car;
+    car = (struct CarInfo *) carInfo;
+    
+    pinMode(leftmotor_a0, INPUT);
+    pinMode(leftmotor_d0, INPUT);
+    
+    while(car->mode != 0){
+      car->leftmotor_speed = digitalRead(leftmotor_a0);
+      
+    }
+  
+} 
 
 void * getSonar(void * carInfo){ // get the measurement results of ultrasonic module, with unit: cm
     printf("getSonar()\n");
@@ -87,6 +126,7 @@ void * getLineReader(void * carInfo){
 
 int startCar(struct CarInfo * carInfo){
 	
+	initMotor(carInfo);
 	pthread_create(&carInfo->threads[0], NULL, getSonar, (void *) carInfo);
 	pthread_create(&carInfo->threads[1], NULL, getIR, (void *) carInfo);
 	pthread_create(&carInfo->threads[2], NULL, getLineReader, (void *) carInfo);
@@ -100,14 +140,15 @@ int main(){
     }
     CarInfo * carInfo = malloc(sizeof(CarInfo));
     carInfo->mode = 1;
-	startCar(carInfo);
+    
+    startCar(carInfo);
 	
-    while(carInfo->mode = 1){
-        printf("The distance is : %.2f cm\n", carInfo->us_distance);
-        printf("The readout of the IR sensor is: %d\n", carInfo->ir_readout);
-        printf("The readout of the Line sesnor is: %d\n", carInfo->line_readout);
-        delay(1000);
-    }
+    //while(carInfo->mode = 1){
+        //printf("The distance is : %.2f cm\n", carInfo->us_distance);
+        //printf("The readout of the IR sensor is: %d\n", carInfo->ir_readout);
+        //printf("The readout of the Line sesnor is: %d\n", carInfo->line_readout);
+        //delay(1000);
+    //}
     
     free(carInfo);
     return 1;
