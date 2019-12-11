@@ -14,9 +14,16 @@
 #define leftmotor_a0 10
 #define leftmotor_d0 12
 
-#define left_motor_pwm 0
-#define left_motor_f 2
-#define left_motor_r 3
+#define left_motor_pwm 12
+#define left_motor_f 13
+#define left_motor_r 14
+
+
+
+#define right_motor_pwm 6
+#define right_motor_f 4
+#define right_motor_f 4
+#define right_motor_r 5
 
 #define MAX_DISTANCE 220 // define the maximum measured distance
 #define timeOut MAX_DISTANCE*60 // calculate timeout according to the maximum measured distance
@@ -50,20 +57,39 @@ typedef struct CarInfo {
 //function pulseIn: obtain pulse time of a pin
 int pulseIn(int pin, int level, int timeout);
 int startCar(struct CarInfo *);
+void motorStop();
+void motorTest();
 
 void * initMotor(void * carInfo) {
+   printf("initMotor()\n");
+    pinMode(left_motor_f, OUTPUT);
+    pinMode(left_motor_r, OUTPUT);
+    pinMode(left_motor_pwm, PWM_OUTPUT);
    
-   pinMode(left_motor_f, OUTPUT);
-   pinMode(left_motor_r, OUTPUT);
-   pinMode(left_motor_pwm, PWM_OUTPUT);
-   
+    pinMode(right_motor_f, OUTPUT);
+    pinMode(right_motor_r, OUTPUT);
+    pinMode(right_motor_pwm, PWM_OUTPUT);
+    
    softPwmCreate(left_motor_pwm, 0, 100);
-   digitalWrite(left_motor_f, HIGH);
-   softPwmWrite(left_motor_pwm, 15);
-   
-   sleep(15);
-   
-   softPwmWrite(left_motor_pwm, 0);
+   softPwmCreate(right_motor_pwm, 0, 100);
+}
+
+int setMotorSpeed(int speed, int forward, int reverse){
+    
+    printf("setMotorSpeed()\nspeed: %d\nforward: %d\nreverse: %d\n", speed, forward, reverse);
+    if(speed > 100) speed = 100;
+    
+    digitalWrite(left_motor_f, forward);
+    digitalWrite(right_motor_f, forward);
+
+    digitalWrite(left_motor_r, reverse);
+    digitalWrite(right_motor_r, reverse);
+  
+    
+    softPwmWrite(left_motor_pwm, speed);
+    softPwmWrite(right_motor_pwm, speed);
+    
+    return speed;
 }
 
 void * getMotorSpeed(void * carInfo){
@@ -76,9 +102,7 @@ void * getMotorSpeed(void * carInfo){
     
     while(car->mode != 0){
       car->leftmotor_speed = digitalRead(leftmotor_a0);
-      
     }
-  
 } 
 
 void * getSonar(void * carInfo){ // get the measurement results of ultrasonic module, with unit: cm
@@ -114,7 +138,7 @@ void * getIR(void * carInfo){
 void * getLineReader(void * carInfo){
 	printf("getLineReader()\n");
 	struct CarInfo * car;
-    car = (struct CarInfo *) carInfo;
+	car = (struct CarInfo *) carInfo;
     
 	pinMode(linePin, INPUT);
 	
@@ -142,18 +166,16 @@ int main(){
     carInfo->mode = 1;
     
     startCar(carInfo);
-	
-    //while(carInfo->mode = 1){
-        //printf("The distance is : %.2f cm\n", carInfo->us_distance);
-        //printf("The readout of the IR sensor is: %d\n", carInfo->ir_readout);
-        //printf("The readout of the Line sesnor is: %d\n", carInfo->line_readout);
-        //delay(1000);
-    //}
+    motorTest();
     
     free(carInfo);
     return 1;
 }
-
+void motorStop()
+{
+    setMotorSpeed(0,HIGH,LOW);
+    sleep(2);
+}
 int pulseIn(int pin, int level, int timeout)
 {
    struct timeval tn, t0, t1;
@@ -190,4 +212,22 @@ int pulseIn(int pin, int level, int timeout)
    micros = micros + (tn.tv_usec - t1.tv_usec);
 
    return micros;
+}
+
+void motorTest(){
+    
+    printf("start\n");
+    for(int i = 25; i <= 50; i++){
+	printf("Forward %d\n", i);
+	setMotorSpeed(i, HIGH, LOW);
+	sleep(1);
+    }
+    motorStop();
+    for(int i = 25; i <= 50; i++){
+	printf("Reverse %d\n", i);
+	setMotorSpeed(i, LOW, HIGH);
+	sleep(1);
+    } 
+    motorStop();
+    printf("finish\n");
 }
