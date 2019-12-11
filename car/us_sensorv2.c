@@ -7,27 +7,32 @@
 #include <stdlib.h>
 #include <softPwm.h>
 
-#define trigPin 7
-#define echoPin 9
-#define irPin 1
-#define linePin 3
+#define trigPin 0
+#define echoPin 2
+
+#define irPin 3
+
+#define linePin 22
+
+#define tiltPin 16
+
 #define leftmotor_a0 10
-#define leftmotor_d0 12
+#define leftmotor_d0 15
 
 #define left_motor_pwm 12
 #define left_motor_f 13
 #define left_motor_r 14
 
-
-
 #define right_motor_pwm 6
-#define right_motor_f 4
 #define right_motor_f 4
 #define right_motor_r 5
 
 #define MAX_DISTANCE 220 // define the maximum measured distance
 #define timeOut MAX_DISTANCE*60 // calculate timeout according to the maximum measured distance
 #define NUM_THREADS 7
+
+#define BASE_SPEED 35
+#define SAFE_DISTANCE 20.0
 
 /* Car Modes:
     1 - Driving
@@ -41,8 +46,9 @@ typedef struct CarInfo {
 	
 	//sensor readouts
 	int ir_readout;
-	float us_distance;
+	float ultrasonic_readout;
 	int line_readout;
+	int tilt_readout;
 	// more info to come
 	
 	//left motor
@@ -64,7 +70,7 @@ void * initMotor(void * carInfo) {
    printf("initMotor()\n");
     pinMode(left_motor_f, OUTPUT);
     pinMode(left_motor_r, OUTPUT);
-    pinMode(left_motor_pwm, PWM_OUTPUT);
+    pinMode(left_motor_pwm, PWM_OUTPUT);  
    
     pinMode(right_motor_f, OUTPUT);
     pinMode(right_motor_r, OUTPUT);
@@ -76,19 +82,18 @@ void * initMotor(void * carInfo) {
 
 int setMotorSpeed(int speed, int forward, int reverse){
     
-    printf("setMotorSpeed()\nspeed: %d\nforward: %d\nreverse: %d\n", speed, forward, reverse);
+    //~ printf("setMotorSpeed()\nspeed: %d\nforward: %d\nreverse: %d\n", speed, forward, reverse);
     if(speed > 100) speed = 100;
     
     digitalWrite(left_motor_f, forward);
     digitalWrite(right_motor_f, forward);
-
+    
     digitalWrite(left_motor_r, reverse);
     digitalWrite(right_motor_r, reverse);
   
-    
     softPwmWrite(left_motor_pwm, speed);
     softPwmWrite(right_motor_pwm, speed);
-    
+
     return speed;
 }
 
@@ -110,17 +115,20 @@ void * getSonar(void * carInfo){ // get the measurement results of ultrasonic mo
     struct CarInfo * car;
     car = (struct CarInfo *) carInfo;
 	
-	pinMode(trigPin,OUTPUT);
+    pinMode(trigPin,OUTPUT);
     pinMode(echoPin,INPUT);
 	
-	while(car->mode != 0){
-		long pingTime;
-		digitalWrite(trigPin,HIGH); //trigPin send 10us high level
-		delayMicroseconds(10);
-		digitalWrite(trigPin,LOW);
-		pingTime = pulseIn(echoPin,HIGH,timeOut); //read plus time of echoPin
-		car->us_distance = (float)pingTime * 340.0 / 2.0 / 10000.0; // the sound speed is 340m/s, and calculate distance
-	}
+    while(car->mode != 0){
+	    long pingTime;
+	    digitalWrite(trigPin,HIGH); //trigPin send 10us high level
+	    delayMicroseconds(10);
+	    digitalWrite(trigPin,LOW);
+	    pingTime = pulseIn(echoPin,HIGH,timeOut); //read plus time of echoPin
+	    car->ultrasonic_readout = (float)pingTime * 340.0 / 2.0 / 10000.0; // the sound speed is 340m/s, and calculate distance
+	    if(car->ultrasonic_readout < 0.1){
+		car->ultrasonic_readout = SAFE_DISTANCE;
+	    }
+    }
 }
 
 void * getIR(void * carInfo){
@@ -148,6 +156,23 @@ void * getLineReader(void * carInfo){
 	
 }
 
+void * getTiltSensor( void * carInfo){
+	printf("getLineReader()\n");
+	struct CarInfo * car;
+	car = (struct CarInfo *) carInfo;
+	
+	pinMode(tiltPin, OUTPUT);
+	digitalWrite(tiltPin, HIGH);
+	
+	pinMode(tiltPin, INPUT);
+	
+	while(car->mode != 0){
+	    
+	    car->tilt_readout = digitalRead(tiltPin);
+	}
+	
+}
+    
 int startCar(struct CarInfo * carInfo){
 	
 	initMotor(carInfo);
@@ -166,8 +191,31 @@ int main(){
     carInfo->mode = 1;
     
     startCar(carInfo);
-    motorTest();
-    
+    int count = 0;
+    while(carInfo->mode != 0)
+    {
+	printf("Ultrasonic Readout: %2f\n", carInfo->ultrasonic_readout);
+	printf("IR Readout: %d\n", carInfo->ir_readout);
+	printf("Tilt Readout: %d\n", carInfo->tilt_readout);
+	if(carInfo->ultrasonic_readout < SAFE_DISTANCE){
+	    motorStop();
+	}
+	else if(carInfo->ir_readout == 1) {
+	    motorStop();
+	}
+	//~ else if(carInfo->tilt_readout == 1){
+	    //~ motorStop();
+	//~ }
+	else{
+	    setMotorSpeed(BASE_SPEED, HIGH, LOW);
+	}
+	sleep(1);
+	if(count > 10){
+	    carInfo->mode = 0;
+	}
+	count++;
+    }
+    motorStop();
     free(carInfo);
     return 1;
 }
