@@ -7,22 +7,26 @@
 #include <stdlib.h>
 #include <softPwm.h>
 
+//ultrasonic sensor pins
 #define trigPin 0
 #define echoPin 2
 
-#define irPin 3
+#define irPin 10
 
-#define linePin 22
+#define linePin 16
 
-#define tiltPin 16
+#define tiltPin 3
 
+//left motor data pins
 #define leftmotor_a0 10
 #define leftmotor_d0 15
 
+//Left motor control pins
 #define left_motor_pwm 12
 #define left_motor_f 13
 #define left_motor_r 14
 
+//Right motor control pins
 #define right_motor_pwm 6
 #define right_motor_f 4
 #define right_motor_r 5
@@ -62,7 +66,7 @@ typedef struct CarInfo {
 
 //function pulseIn: obtain pulse time of a pin
 int pulseIn(int pin, int level, int timeout);
-int startCar(struct CarInfo *);
+void startCar(struct CarInfo *);
 void motorStop();
 void motorTest();
 
@@ -143,7 +147,7 @@ void * getIR(void * carInfo){
 	}
 }
 
-void * getLineReader(void * carInfo){
+void * getLineSensor(void * carInfo){
 	printf("getLineReader()\n");
 	struct CarInfo * car;
 	car = (struct CarInfo *) carInfo;
@@ -161,24 +165,20 @@ void * getTiltSensor( void * carInfo){
 	struct CarInfo * car;
 	car = (struct CarInfo *) carInfo;
 	
-	pinMode(tiltPin, OUTPUT);
-	digitalWrite(tiltPin, HIGH);
-	
 	pinMode(tiltPin, INPUT);
 	
 	while(car->mode != 0){
-	    
-	    car->tilt_readout = digitalRead(tiltPin);
+	    car->tilt_readout = !digitalRead(tiltPin);
 	}
-	
 }
-    
-int startCar(struct CarInfo * carInfo){
+   
+void startCar(struct CarInfo * carInfo){
 	
 	initMotor(carInfo);
 	pthread_create(&carInfo->threads[0], NULL, getSonar, (void *) carInfo);
 	pthread_create(&carInfo->threads[1], NULL, getIR, (void *) carInfo);
-	pthread_create(&carInfo->threads[2], NULL, getLineReader, (void *) carInfo);
+	pthread_create(&carInfo->threads[2], NULL, getLineSensor, (void *) carInfo);
+	pthread_create(&carInfo->threads[3], NULL, getTiltSensor, (void *) carInfo);
 }
 
 int main(){
@@ -192,22 +192,28 @@ int main(){
     
     startCar(carInfo);
     int count = 0;
+    int current_speed = BASE_SPEED;
     while(carInfo->mode != 0)
     {
 	printf("Ultrasonic Readout: %2f\n", carInfo->ultrasonic_readout);
 	printf("IR Readout: %d\n", carInfo->ir_readout);
 	printf("Tilt Readout: %d\n", carInfo->tilt_readout);
+	printf("Line Sensor 1 Readout: %d\n", carInfo->line_readout);
 	if(carInfo->ultrasonic_readout < SAFE_DISTANCE){
 	    motorStop();
 	}
 	else if(carInfo->ir_readout == 1) {
 	    motorStop();
 	}
-	//~ else if(carInfo->tilt_readout == 1){
-	    //~ motorStop();
-	//~ }
+	else if(carInfo->tilt_readout == 1){
+	    motorStop();
+	}
+	else if(carInfo->line_readout == 1){
+
+	    current_speed = setMotorSpeed(BASE_SPEED / 2, HIGH, LOW);
+	}
 	else{
-	    setMotorSpeed(BASE_SPEED, HIGH, LOW);
+	    current_speed = setMotorSpeed(BASE_SPEED, HIGH, LOW);
 	}
 	sleep(1);
 	if(count > 10){
