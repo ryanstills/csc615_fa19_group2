@@ -30,5 +30,5 @@ Build a realtime adaptive vehicle that can maneuver around an undefined course f
 
 ## GCC command line build
 
-gcc -o us_sensorv2 us_sensorv2.c -l wiringPi -l pthread
+gcc -o main main.c -l wiringPi -l pthread
 
