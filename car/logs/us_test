@@ -1,0 +1,19 @@
+Program is starting ... 
+initMotor()
+getSonar()
+getIR()
+getLineReader()
+getLineReader()
+Car not started
+getMotorSpeed()
+Car started
+Car stopped due to unsafe distance of: 29.716000 cm
+motorStop()
+waiting 1..waiting 2..waiting 3..Changing to car mode 2
+mode 2
+motorStop()
+waiting 1..waiting 2..waiting 3..join thread 0
+join thread 1
+join thread 2
+join thread 3
+join thread 4
