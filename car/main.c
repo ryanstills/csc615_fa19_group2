@@ -30,6 +30,7 @@
     3 - Obstacle Avoidance 
  */
 
+/* this struct contains all the global information for the car */
 typedef struct CarInfo {
 	float speed;
 	int mode;
@@ -65,6 +66,7 @@ void phase_one();
 void phase_two();
 void phase_three();
 
+//initiates all the pins states for the motor speed adjustment
 void * initMotor(void * carInfo) {
    printf("initMotor()\n");
     pinMode(left_motor_f, OUTPUT);
@@ -79,6 +81,9 @@ void * initMotor(void * carInfo) {
    softPwmCreate(right_motor_pwm, 0, 400);
 }
 
+// set forward to 1 and reverse to 0 for forward movement
+// set forward to 0 and reverse to 1 for reverse movement.
+// speed between 0 and 400
 int setMotorSpeed(int motor, int speed, int forward, int reverse){
     
     //~ printf("setMotorSpeed()\n");
@@ -100,20 +105,8 @@ int setMotorSpeed(int motor, int speed, int forward, int reverse){
     return speed;
 }
 
-void * getMotorSpeed(void * carInfo){
-    printf("getMotorSpeed()\n");
-    struct CarInfo * car;
-    car = (struct CarInfo *) carInfo;
-    
-    pinMode(leftmotor_d0, INPUT);
-    pinMode(rightmotor_d0, INPUT);
-    
-    while(car->mode != 0){
-	car->left_motor_speed = digitalRead(leftmotor_d0);
-	car->right_motor_speed = digitalRead(rightmotor_d0);
-    }
-} 
-
+// used to get distance of objects in front
+// if distance is further than max range, max range is set for the distance
 void * getSonar(void * carInfo){ // get the measurement results of ultrasonic module, with unit: cm
     printf("getSonar()\n");
     struct CarInfo * car;
@@ -137,6 +130,7 @@ void * getSonar(void * carInfo){ // get the measurement results of ultrasonic mo
     }
 }
 
+// reads from both IR sensors
 void * getIR(void * carInfo){
 	printf("getIR()\n");
 	struct CarInfo * car;
@@ -150,6 +144,7 @@ void * getIR(void * carInfo){
 	}
 }
 
+//reads from both line sensors
 void * getLineSensor(void * carInfo){
 	printf("getLineReader()\n");
 	struct CarInfo * car;
@@ -165,18 +160,7 @@ void * getLineSensor(void * carInfo){
 	
 }
 
-void * getTiltSensor( void * carInfo){
-	printf("getLineReader()\n");
-	struct CarInfo * car;
-	car = (struct CarInfo *) carInfo;
-	
-	pinMode(tiltPin, INPUT);
-	
-	while(car->mode != 0){
-	    car->tilt_readout = !digitalRead(tiltPin);
-	}
-}
-   
+//initializes all car sensor threads
 void startCar(struct CarInfo * carInfo){
 	
 	initMotor(carInfo);
@@ -186,6 +170,7 @@ void startCar(struct CarInfo * carInfo){
 	pthread_create(&carInfo->threads[3], NULL, getTiltSensor, (void *) carInfo);
 }
 
+// main functions
 int main(){
   
     printf("Program is starting ... \n");
@@ -201,20 +186,19 @@ int main(){
     int count = 0;
     int distance_flag = 0;
     int arr_pos = 0;
+	
     //adjusting left motor speed by 24 to compensate for speed mismatch
     int left_motor_speed = BASE_SPEED + 24;
     int right_motor_speed = BASE_SPEED;
     int current_speed = BASE_SPEED;
     
+    //array for holding sonar sensor historical readings
     float distance_arr[ARR_SIZE];
-    //~ motorStop();
-    //~ return 0;
+ 
     printf("Car not started\n");
     while(carInfo->back_ir_readout != 1) {}
     printf("Car started\n");
     sleep(2);
-    
-   
     
     while(carInfo->mode != 0)
     {
@@ -226,19 +210,22 @@ int main(){
 	    arr_pos = 0;
 	}
 	
+	//car mode 1 is driving straight
 	if(carInfo->mode == 1){
 	    float average_distance = avg_distance(ARR_SIZE, distance_arr);
+	    //if the average of the last 20 sonar distances is below the safe distance. stop car
 	    if(avg_distance(ARR_SIZE, distance_arr) <= SAFE_DISTANCE){
 		printf("average distance trigger: %2f\n", average_distance);	   
 		printf("Car stopped due to unsafe distance of: %2f cm\n", carInfo->ultrasonic_readout);
 		motorStop(4);
+		//if, after waiting there is still an object in front of the car, go around
 		if(carInfo->ultrasonic_readout <= SAFE_DISTANCE){
 		    carInfo->mode = 2;
 		    printf("Changing to car mode %d\n", carInfo->mode);
 		}
 		printf("obstacle moved\n");
 	    }
-	
+	    //adjust car right if the left line sensor is active 
 	    while(carInfo->left_line_readout == 1)
 	    {		
 		left_motor_speed = setMotorSpeed(LEFT_MOTOR, TURN_SPEED, HIGH, LOW);
@@ -247,13 +234,14 @@ int main(){
 	    }
 	    left_motor_speed = setMotorSpeed(LEFT_MOTOR, BASE_SPEED + 24, HIGH, LOW);
 	    right_motor_speed = setMotorSpeed(RIGHT_MOTOR, BASE_SPEED , HIGH, LOW);
+	    //adjust car left if the right line sensor is active
 	    while(carInfo->right_line_readout == 1)
 	    {
 		left_motor_speed = setMotorSpeed(LEFT_MOTOR, left_motor_speed, HIGH, LOW);
 		right_motor_speed = setMotorSpeed(RIGHT_MOTOR, TURN_SPEED, HIGH, LOW);
 		usleep(2500);
 	    }
-	    
+	    //go straight
 	    left_motor_speed = setMotorSpeed(LEFT_MOTOR, BASE_SPEED + 24, HIGH, LOW);
 	    right_motor_speed = setMotorSpeed(RIGHT_MOTOR, BASE_SPEED , HIGH, LOW);
 
@@ -272,14 +260,16 @@ int main(){
 	usleep(10000);
 	count++;
     }
-
+    // join threads at end
     for(int i = 0; i < 4; i++){
 	printf("join thread %d\n", i);
 	pthread_join(carInfo->threads[i], NULL);
     }
+    //free heap memory used for car struct
     free(carInfo);
     return 1;
 }
+//stop the motor for specified about of time
 void motorStop(int time)
 {
     printf("motorStop()\n");
@@ -287,6 +277,7 @@ void motorStop(int time)
     setMotorSpeed(RIGHT_MOTOR,0,HIGH,LOW);
     sleep(time);
 }
+//calculates distance based on time the sound takes to bounce back
 int pulseIn(int pin, int level, int timeout)
 {
    struct timeval tn, t0, t1;
@@ -325,7 +316,7 @@ int pulseIn(int pin, int level, int timeout)
 
    return micros;
 }
-
+//averages the last ARR_SIZE sonar distances to account for false readings
 float avg_distance(int max_size, float * distance_arr){
     float sum = 0.0;
     for(int i = 0; i < max_size; i++){
@@ -333,7 +324,12 @@ float avg_distance(int max_size, float * distance_arr){
     }
     return sum / max_size;
 }
-
+/*
+OBSTACLE AVOIDANCE
+phase 1: rotate car in place until side sensors pick up obstacle
+phase 2: if one sensor is off adjust until it is on, repeat until the line is found
+phase 3: based on line sensor that is active, adjust car to be on line
+*/
 int mode_two(struct CarInfo * car){
     phase_one(car);
     phase_two(car);
