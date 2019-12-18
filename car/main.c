@@ -1,4 +1,6 @@
-//taken from the raspberry Pi tutorial
+/*
+	Group 2 Car Project CSc 615
+*/
 #include <wiringPi.h>
 #include <stdio.h>
 #include <unistd.h>
