@@ -7,7 +7,8 @@
 #define echoPin 2
 
 //ir sensor
-#define irPin 10
+#define backIRPin 10
+#define frontIRPin 3
 
 //line pins
 #define leftLinePin 16

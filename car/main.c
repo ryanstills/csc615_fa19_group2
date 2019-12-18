@@ -14,15 +14,15 @@
 #define timeOut MAX_DISTANCE*60 // calculate timeout according to the maximum measured distance
 #define NUM_THREADS 7
 
-#define ARR_SIZE 5
+#define ARR_SIZE 20
 
 #define BASE_SPEED 110
 #define TURN_SPEED 5
-#define SAFE_DISTANCE 30
+#define SAFE_DISTANCE 15
 #define LEFT_MOTOR 50
 #define RIGHT_MOTOR 51
 
-#define TEST_TIME 3000
+#define TEST_TIME 120000
 
 /* Car Modes:
     1 - Driving
@@ -35,7 +35,8 @@ typedef struct CarInfo {
 	int mode;
 	
 	//sensor readouts
-	volatile int ir_readout;
+	volatile int back_ir_readout;
+	volatile int front_ir_readout;
 	volatile float ultrasonic_readout;
 	volatile int left_line_readout;
 	volatile int right_line_readout;
@@ -56,8 +57,13 @@ typedef struct CarInfo {
 int pulseIn(int pin, int level, int timeout);
 void startCar(struct CarInfo *);
 float avg_distance(int, float *);
-void motorStop();
-void motorTest();
+void motorStop(int);
+int mode_two();
+void rotate_right();
+void rotate_left();
+void phase_one();
+void phase_two();
+void phase_three();
 
 void * initMotor(void * carInfo) {
    printf("initMotor()\n");
@@ -124,7 +130,9 @@ void * getSonar(void * carInfo){ // get the measurement results of ultrasonic mo
 	    digitalWrite(trigPin,LOW);
 	    pingTime = pulseIn(echoPin,HIGH,timeOut); //read plus time of echoPin
 	    readout = (float)pingTime * 340.0 / 2.0 / 10000.0;
-	
+	    //~ if(readout < SAFE_DISTANCE){
+		//~ printf("readout: %2f\n", readout);
+	    //~ }
 	    car->ultrasonic_readout = (readout < 1.0) ? MAX_DISTANCE : readout; // the sound speed is 340m/s, and calculate distance
     }
 }
@@ -134,10 +142,11 @@ void * getIR(void * carInfo){
 	struct CarInfo * car;
 	car = (struct CarInfo *) carInfo;
 
-	pinMode(irPin,INPUT);
+	pinMode(backIRPin,INPUT);
     
 	while(car->mode != 0){
-		car->ir_readout = !digitalRead(irPin);
+		car->back_ir_readout = !digitalRead(backIRPin);
+		car->front_ir_readout = !digitalRead(frontIRPin);
 	}
 }
 
@@ -175,7 +184,6 @@ void startCar(struct CarInfo * carInfo){
 	pthread_create(&carInfo->threads[1], NULL, getIR, (void *) carInfo);
 	pthread_create(&carInfo->threads[2], NULL, getLineSensor, (void *) carInfo);
 	pthread_create(&carInfo->threads[3], NULL, getTiltSensor, (void *) carInfo);
-	pthread_create(&carInfo->threads[4], NULL, getMotorSpeed, (void *) carInfo);
 }
 
 int main(){
@@ -202,7 +210,7 @@ int main(){
     //~ motorStop();
     //~ return 0;
     printf("Car not started\n");
-    while(carInfo->ir_readout != 1) {}
+    while(carInfo->back_ir_readout != 1) {}
     printf("Car started\n");
     sleep(2);
     
@@ -210,18 +218,25 @@ int main(){
     
     while(carInfo->mode != 0)
     {
+	// this updates the array poistion and places the most recent
+	// distance reading into the array to be 'smoothed'
 	distance_arr[arr_pos] = carInfo->ultrasonic_readout;
 	arr_pos++;
-	if(arr_pos > 4){
+	if(arr_pos > ARR_SIZE - 1){
 	    arr_pos = 0;
 	}
+	
 	if(carInfo->mode == 1){
-	    
-	    if(avg_distance(ARR_SIZE, distance_arr) <= SAFE_DISTANCE){	   
+	    float average_distance = avg_distance(ARR_SIZE, distance_arr);
+	    if(avg_distance(ARR_SIZE, distance_arr) <= SAFE_DISTANCE){
+		printf("average distance trigger: %2f\n", average_distance);	   
 		printf("Car stopped due to unsafe distance of: %2f cm\n", carInfo->ultrasonic_readout);
-		motorStop();
-		carInfo->mode = 2;
-		printf("Changing to car mode %d\n", carInfo->mode);
+		motorStop(4);
+		if(carInfo->ultrasonic_readout <= SAFE_DISTANCE){
+		    carInfo->mode = 2;
+		    printf("Changing to car mode %d\n", carInfo->mode);
+		}
+		printf("obstacle moved\n");
 	    }
 	
 	    while(carInfo->left_line_readout == 1)
@@ -245,34 +260,32 @@ int main(){
 	}
 	else if(carInfo->mode == 2){
 	    printf("mode 2\n");
-	    carInfo->mode = 0;
-	    motorStop();
+	    mode_two(carInfo);
+	    carInfo->mode = 1;
+	    motorStop(1);
 	}
 	if(count > TEST_TIME){
 	    carInfo->mode = 0;
 	    printf("+++++++++++++++++++++++++++++++++++++++++++++\n");
-	    motorStop();
+	    motorStop(1);
 	}
 	usleep(10000);
 	count++;
     }
 
-    for(int i = 0; i < 5; i++){
+    for(int i = 0; i < 4; i++){
 	printf("join thread %d\n", i);
 	pthread_join(carInfo->threads[i], NULL);
     }
     free(carInfo);
     return 1;
 }
-void motorStop()
+void motorStop(int time)
 {
     printf("motorStop()\n");
     setMotorSpeed(LEFT_MOTOR,0,HIGH,LOW);
     setMotorSpeed(RIGHT_MOTOR,0,HIGH,LOW);
-    for(int i = 1; i <= 3; i++){
-	printf("waiting %d..\r", i);
-	sleep(1);
-    }
+    sleep(time);
 }
 int pulseIn(int pin, int level, int timeout)
 {
@@ -320,22 +333,88 @@ float avg_distance(int max_size, float * distance_arr){
     }
     return sum / max_size;
 }
-void motorTest(){
-    
-    printf("start\n");
-    for(int i = 25; i <= 40; i++){
-	printf("Forward %d\n", i);
-	setMotorSpeed(LEFT_MOTOR, i, HIGH, LOW);
-	setMotorSpeed(RIGHT_MOTOR, i, HIGH, LOW);
-	sleep(1);
+
+int mode_two(struct CarInfo * car){
+    phase_one(car);
+    phase_two(car);
+    phase_three(car);
+
+    return 1;
+}
+
+void phase_one(struct CarInfo * car){
+    printf("phase one part 1\n");
+    while(car->back_ir_readout == 0 || car->front_ir_readout == 0){
+	rotate_right();
     }
-    motorStop();
-    for(int i = 25; i <= 40; i++){
-	printf("Reverse %d\n", i);
-	setMotorSpeed(LEFT_MOTOR, i, LOW, HIGH);
-	setMotorSpeed(RIGHT_MOTOR, i, LOW, HIGH);
-	sleep(1);
-    } 
-    motorStop();
-    printf("finish\n");
+    motorStop(1);   
+}
+void phase_two(struct CarInfo * car){
+    int left_motor_speed = BASE_SPEED + 24;
+    int right_motor_speed = BASE_SPEED;
+    printf("phase two\n");
+    while(car->left_line_readout == 0 && car->right_line_readout == 0){
+	
+	if((car->front_ir_readout == 0 && car->back_ir_readout == 1) || (car->front_ir_readout == 0 && car->back_ir_readout == 0) ){
+	    setMotorSpeed(LEFT_MOTOR, left_motor_speed / 2, HIGH, LOW);
+	    setMotorSpeed(RIGHT_MOTOR, right_motor_speed - 10, HIGH, LOW);
+	}
+	else if(car->back_ir_readout == 0 && car->front_ir_readout == 1){
+	    setMotorSpeed(LEFT_MOTOR, left_motor_speed, HIGH, LOW);
+	    setMotorSpeed(RIGHT_MOTOR, right_motor_speed / 2, HIGH, LOW);  
+	}
+	else{
+	    setMotorSpeed(LEFT_MOTOR, left_motor_speed, HIGH, LOW);
+	    setMotorSpeed(RIGHT_MOTOR, right_motor_speed, HIGH, LOW);
+	}
+    }
+    motorStop(1);
+}
+void phase_three(struct CarInfo * car){
+    printf("phase three\n");
+    if(car->left_line_readout == 1 && car->right_line_readout == 0){
+	while(car->left_line_readout == 1 ){
+	    int left_motor_speed = BASE_SPEED + 24;
+	    int right_motor_speed = BASE_SPEED;
+	    
+	    setMotorSpeed(LEFT_MOTOR, left_motor_speed, HIGH, LOW);
+	    setMotorSpeed(RIGHT_MOTOR, right_motor_speed, HIGH, LOW);
+	}
+    }
+    else if(car->right_line_readout == 1 && car->left_line_readout == 0){
+	while(car->right_line_readout == 1){
+	    int left_motor_speed = BASE_SPEED + 24;
+	    int right_motor_speed = BASE_SPEED;
+	    
+	    setMotorSpeed(LEFT_MOTOR, left_motor_speed, HIGH, LOW);
+	    setMotorSpeed(RIGHT_MOTOR, right_motor_speed, HIGH, LOW);
+	}
+	while(car->right_line_readout == 0){
+	    rotate_right();
+	}
+	while(car->right_line_readout == 1){
+	    rotate_right();
+	}
+    }
+    else{
+	while(car->right_line_readout == 1){
+	    rotate_right();
+	}
+    }
+}
+
+void rotate_right(){
+    int left_motor_speed = (int)((BASE_SPEED + 24) * 0.9);
+    int right_motor_speed = (int)((BASE_SPEED) * 0.9);
+    
+    setMotorSpeed(LEFT_MOTOR, left_motor_speed, HIGH, LOW);
+    setMotorSpeed(RIGHT_MOTOR, right_motor_speed, LOW, HIGH);
+}
+
+void rotate_left(){
+    int left_motor_speed = (int)((BASE_SPEED + 24) * 0.9);
+    int right_motor_speed = (int)((BASE_SPEED) * 0.9);
+    
+    setMotorSpeed(LEFT_MOTOR, left_motor_speed, LOW, HIGH);
+    setMotorSpeed(RIGHT_MOTOR, right_motor_speed, HIGH, LOW);
 }
